@@ -10,8 +10,7 @@
 #include "linkedlist.h"
 
 pid_t pid;
-Job *jfront;
-Job *jptr;
+
 int jobnum = 1;
 
 // splits buf into args, delimited by a space or newline
@@ -45,9 +44,9 @@ int main(int argc, char *argv[]) {
     signal(SIGINT, int_handler);
     signal(SIGTSTP, stp_handler);
 
+    Job *jfront = 0;
+    Job *jptr = 0;
     pid_t pgid = getpid();
-    jfront = 0;
-    jptr = jfront;
     int bg = 0;
     char *buf = 0;
     size_t bufsize = 128;
@@ -109,20 +108,23 @@ int main(int argc, char *argv[]) {
 
         // fork process
         if ((pid = fork()) == 0) {
-            setpgid(0, pgid);
-            if (jfront == 0) {
-                jfront = allocate(jobnum++, getpid(), 0, args[0], bg);
-                printf("%d\n", jobnum);
-            } else {
-                printf("more jobs\n");
-                jptr->next = allocate(jobnum++, getpid(), 0, args[0], bg);
-                jptr = jptr->next;
-            }
-            printer(jfront);
             execve(args[0], args, NULL);
             exit(0);
         } else {
             // only wait when process in the foreground
+            setpgid(pid, pgid);
+            if (jptr == 0) {
+                jptr = allocate(jobnum++, pid, 0, args[0], bg);
+                jfront = jptr;
+                printf("%d\n", jobnum);
+            } else {
+                printf("more jobs\n");
+                jptr->next = allocate(jobnum++, pid, 0, args[0], bg);
+                jptr = jptr->next;
+            }
+            printf("pointer and front are: %p %p\n", jptr, jfront);
+            printer(jfront);
+
             if (bg == 0) {
                 pid_t w = 0;
                 wait(&w);
@@ -133,6 +135,7 @@ int main(int argc, char *argv[]) {
             free(args[i]);
         }
         free(args);
+
     }
     return 0;
 }

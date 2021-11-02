@@ -16,9 +16,9 @@ struct Job *allocate(int num, pid_t pid, int cond, char *name, int bg) {
     job->num = num;
     job->pid = pid;
     job->cond = cond;
-    // n->name = malloc(sizeof(name));
-    // strcpy(n->name, name);
-    job->name = name;
+    job->name = malloc(sizeof(name));
+    printf("argument ptr, job ptr: %p %p\n", name, job->name);
+    strcpy(job->name, name);
     job->bg = bg;
     job->next = 0;
     return job;
