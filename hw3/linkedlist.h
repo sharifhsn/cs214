@@ -16,30 +16,76 @@ struct Job *allocate(int num, pid_t pid, int cond, char *name, int bg) {
     job->num = num;
     job->pid = pid;
     job->cond = cond;
-    job->name = malloc(sizeof(name));
-    printf("argument ptr, job ptr: %p %p\n", name, job->name);
+    job->name = malloc(strlen(name) + 1);
+    // printf("argument ptr, job ptr: %p %p\n", name, job->name);
     strcpy(job->name, name);
     job->bg = bg;
     job->next = 0;
     return job;
 }
 
-struct Job *rm_job(struct Job *front, struct Job *rmn) {
-    if (rmn == front) {
+struct Job *rm_job(struct Job *front, struct Job *jptr, int rm_pid) {
+    if (rm_pid == front->pid) {
+        if (front->next == 0) {
+            free(front->name);
+            free(front);
+            return 0;
+        }
+        struct Job *temp = front;
+        if (temp == jptr) {
+            jptr = front->next;
+            jptr->next = front->next->next;
+        }
         front = front->next;
-        free(rmn->name);
-        free(rmn);
+        free(temp->name);
+        free(temp);
     } else {
         for (struct Job *ptr = front; ptr->next != 0; ptr = ptr->next) {
-            if (ptr->next == rmn) {
-                ptr->next = rmn->next;
-                free(rmn->name);
-                free(rmn);
+            if (ptr->next->pid == rm_pid) {
+                struct Job *temp = ptr->next;
+                if (temp == jptr) {
+                    jptr = ptr;
+                    jptr->next = ptr->next->next;
+                }
+                ptr->next = ptr->next->next;
+                free(temp->name);
+                free(temp);
                 break;
             }
         }
     }
     return front;
+}
+
+
+void deleteNode(struct Job **ffront, int rm_pid) {
+    // Store head node
+    struct Job *temp = *ffront, *prev;
+ 
+    // If head node itself holds the key to be deleted
+    if (temp != NULL && temp->pid == rm_pid) {
+        *ffront = temp->next; // Changed head
+        free(temp->name);
+        free(temp); // free old head
+        return;
+    }
+ 
+    // Search for the key to be deleted, keep track of the
+    // previous node as we need to change 'prev->next'
+    while (temp != NULL && temp->pid != rm_pid) {
+        prev = temp;
+        temp = temp->next;
+    }
+ 
+    // If key was not present in linked list
+    if (temp == NULL)
+        return;
+ 
+    // Unlink the node from linked list
+    prev->next = temp->next;
+ 
+    free(temp->name);
+    free(temp); // Free memory
 }
 
 void frees(struct Job* front) {
