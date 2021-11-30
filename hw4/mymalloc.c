@@ -109,7 +109,7 @@ void *mymalloc(size_t size) {
     if (alloc_alg == 0) {
         for (struct Head *ptr = root->next; ptr != NULL; ptr = ptr->next) {
             // amount to allocate fits in given block
-            if (size <= ptr->size) {
+            if (size <= (ptr->size - sizeof(Head))) {
                 // find an address that fits alignment
                 void *aptr = ptr;
                 while (((uintptr_t) aptr) % 8 != 0) {
@@ -121,9 +121,9 @@ void *mymalloc(size_t size) {
                     continue;
                 } else {
                     // split free block
-                    struct Head *h = aptr + size;
+                    struct Head *h = aptr + size + sizeof(Head);
                     printf("aptr is %p, h is %p\n", aptr, h);
-                    h->size = ptr->size - size;
+                    h->size = ptr->size - size - sizeof(Head);
                     h->valid = 13;
                     h->prev = ptr->prev;
                     if (ptr->prev != NULL) {
@@ -133,10 +133,10 @@ void *mymalloc(size_t size) {
                     if (ptr->next != NULL) {
                         ptr->next->prev = h;
                     }
-                    *((int *) (h + h->size - FOOTSIZE)) = ptr->size - size;
+                    *((int *) (h + h->size - FOOTSIZE)) = ptr->size - size - sizeof(Head);
                     printer();
                     ptr->valid = 1989;
-                    return ptr;
+                    return aptr + sizeof(Head);
                 }
             }
         }
@@ -147,7 +147,7 @@ void *mymalloc(size_t size) {
 void printer() {
     printf("explicit free list: ");
     for (struct Head *ptr = root->next; ptr != NULL; ptr = ptr->next) {
-        printf("%p (%d) -> ", ptr, ptr->size);
+        printf("%p (%d) (%p) -> ", ptr, ptr->size, (ptr + ptr->size - FOOTSIZE));
     }
     printf("\n");
 }
@@ -166,7 +166,7 @@ void myfree(void *ptr) {
     }
 
     // not a malloced address
-    struct Head *aptr = ptr;
+    struct Head *aptr = ptr - sizeof(Head);
     if (!(aptr->valid == 1989 || aptr->valid == 13 || aptr->valid == 875)) {
         printf("error: not a malloced address\n");
         return;
@@ -178,7 +178,18 @@ void myfree(void *ptr) {
         return;
     }
 
-    // case 4: coalescing on both ends
+    // check for coalescing
+    int nf = 0;
+    int pf = 0;
+    struct Head *nptr = aptr + aptr->size;
+    struct Head *pptr = aptr - *((int *) (ptr - sizeof(Head) - FOOTSIZE));
+
+    if (nptr->valid == 13) {
+        nf = 1;
+    }
+    if (pptr->valid == 13) {
+        pf = 1;
+    }
     
 
 }
