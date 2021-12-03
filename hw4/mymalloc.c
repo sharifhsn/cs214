@@ -26,11 +26,11 @@ void myinit(int allocAlg) {
     struct Head *h = heap;
     h->size = HEAPSIZE;
     h->valid = 13;
-    h->ptrs.next = NULL;
-    h->ptrs.prev = NULL;
+    h->next = NULL;
+    h->prev = root;
     FOOT(h) = HEAPSIZE;
-    root->ptrs.next = h;
-    root->ptrs.prev = NULL;
+    root->next = h;
+    root->prev = NULL;
 
     printf("front is: %p\n", h);
     //printf("size is %lu\n", *((int *) VIT(h) + h->size - FOOTSIZE));
@@ -50,13 +50,13 @@ void *mymalloc(size_t size) {
     struct Head *h = VIT(blk) + size + PADDING;
     h->valid = 13;
     h->size = blk->size - size - PADDING;
-    h->ptrs.next = blk->ptrs.next;
-    h->ptrs.prev = blk->ptrs.prev;
-    if (blk->ptrs.next != NULL) {
-        blk->ptrs.next->prev = &(h->ptrs);
+    h->next = blk->next;
+    h->prev = blk->prev;
+    if (blk->next != NULL) {
+        blk->next->prev = h;
     }
-    if (blk->ptrs.prev != NULL) {
-        blk->ptrs.prev->next = &(h->ptrs);
+    if (blk->prev != NULL) {
+        blk->prev->next = h;
     }
     // printf("pointer of h is %p\n", h);
     // printf("size of size: %d\n", h->size);
@@ -72,7 +72,7 @@ void *mymalloc(size_t size) {
 
 Head *find_fit(size_t size) {
     if (alloc_alg == 0) {
-        for (Head *ptr = root->ptrs.next; ptr != NULL; ptr = ptr->ptrs.next) {
+        for (Head *ptr = root->next; ptr != NULL; ptr = ptr->next) {
             if (ptr->valid == 13 && ptr->size >= size + PADDING) {
                 return ptr;
             }
@@ -98,8 +98,8 @@ void myfree(void *ptr) {
 
     // don't worry about coalescing for now
     h->valid = 13;
-    h->ptrs.next = root->ptrs.next;
-    root->ptrs.next = h;
+    h->next = root->next;
+    root->next = h;
 }
 
 void *myrealloc(void *ptr, size_t size) {

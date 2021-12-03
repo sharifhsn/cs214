@@ -1,12 +1,8 @@
-typedef struct LL {
-    struct LL *next;
-    struct LL *prev;
-} LL;
-
 typedef struct Head {
     int size;
     int valid;
-    LL ptrs;
+    struct Head *next;
+    struct Head *prev;
 } Head;
 
 /**
