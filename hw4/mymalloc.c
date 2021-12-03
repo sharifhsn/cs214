@@ -4,198 +4,106 @@
 
 #include "mymalloc.h"
 
-/// Size of the header and footer added together
-const int PADDING = sizeof(int) + sizeof(void *) + sizeof(void *) + sizeof(int);
-
-/// 1 MB of heap size in bytes
-const int HEAPSIZE = 1 << 20;
-
-/// Add to "header" pointer to get address of "next" pointer.
-const int NEXT_D = sizeof(int);
-
-/// Add to "header" pointer to get address of "prev" pointer.
-const int PREV_D = sizeof(int) + sizeof(void *);
-
-/// Size of the "footer" at the end of each block
-const int FOOTSIZE = sizeof(int);
+#define HEAPSIZE (1 << 20)
+#define FOOTSIZE (sizeof(unsigned long))
+#define PADDING (sizeof(Head) + sizeof(unsigned long))
+#define VIT(p) ((void *) p)
+#define FOOT(h) (*(unsigned long *) (VIT(h) + h->size - FOOTSIZE))
 
 
-/// pointer to the first byte of the heap
-static struct Head *heap;
-
-/// pointer to the first free block in the explicit free list
+static void *heap;
 static struct Head *root;
 
-/**
- * Allocation algorithm:
- * - 0: first-fit
- * - 1: next-fit
- * - 2: best-fit
- */
 static int alloc_alg;
 
-/// header structure to place at the beginning of node in the explicit free list
-struct Head {
-    int size; // 4 bytes
-    int valid; // 13 if free, 1989 if allocated, 875 if root
-    struct Head *next; // 8 bytes
-    struct Head *prev; // 8 bytes
-} Head;
-
-
 void myinit(int allocAlg) {
-    // alloc_alg = allocAlg;
-    // heap = malloc(HEAPSIZE);
-    // front = heap;
-    // *front = HEAPSIZE;
-    // *(front + NEXT_D) = 0x0;
-    // *(front + PREV_D) = 0x0;
-    // *(front + *front - FOOTSIZE) = *front;
-    // void *ptr = front;
-    // for (int i = 0; i < HEAPSIZE; i++, ptr++) {
-    //     printf("pointer is: %p\n", ptr);
-    // }
-    // printf("top pointer is %p\n", front);
-
     alloc_alg = allocAlg;
     heap = malloc(HEAPSIZE);
     root = malloc(sizeof(Head));
     root->size = 0;
     root->valid = 875;
 
-    root->next = heap;
-    root->next->size = HEAPSIZE;
-    root->next->valid = 13;
-    root->next->next = NULL;
-    root->next->prev = root;
-    *((int *) (root->next + root->next->size - FOOTSIZE)) = HEAPSIZE;
-    printf("front is: %p\n", root->next);
-    printf("payload addr is: %p\n", root->next + sizeof(Head));
-    printf("head size is: %ld\n", sizeof(Head));
+    struct Head *h = heap;
+    h->size = HEAPSIZE;
+    h->valid = 13;
+    h->ptrs.next = NULL;
+    h->ptrs.prev = NULL;
+    FOOT(h) = HEAPSIZE;
+    root->ptrs.next = h;
+    root->ptrs.prev = NULL;
+
+    printf("front is: %p\n", h);
+    //printf("size is %lu\n", *((int *) VIT(h) + h->size - FOOTSIZE));
+    printf("end of heap: %p\n", VIT(h) + h->size);
+    printf("%d\n", HEAPSIZE);
 }
 
-// void split(int *ptr, size_t size) {
-//     int *tnext = *(ptr + 1);
-//     int *tprev = *(ptr + 2);
-// }
-
 void *mymalloc(size_t size) {
-    // if (size == 0) {
-    //     return NULL;
-    // }
-    // if (alloc_alg == 0) {
-    //     for (int *ptr = front; ptr != NULL; ptr = *(ptr + NEXT_D)) {
-    //         // amount to allocate fits in given block
-    //         if (size <= *ptr) {
-    //             // find an address that aligns with 8
-    //             for (int *aptr = ptr + HEADSIZE; aptr < ptr + *ptr - FOOTSIZE; aptr++) {
-    //                 if (*aptr % 8 == 0) {
-                        
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
-
-    // return front;
-
     if (size == 0) {
         return NULL;
     }
+    // align size
+    if (size % 8 != 0) {
+        size += (8 - size % 8);
+    }
+    struct Head *blk = find_fit(size + PADDING);
+    struct Head *h = VIT(blk) + size + PADDING;
+    h->valid = 13;
+    h->size = blk->size - size - PADDING;
+    h->ptrs.next = blk->ptrs.next;
+    h->ptrs.prev = blk->ptrs.prev;
+    if (blk->ptrs.next != NULL) {
+        blk->ptrs.next->prev = &(h->ptrs);
+    }
+    if (blk->ptrs.prev != NULL) {
+        blk->ptrs.prev->next = &(h->ptrs);
+    }
+    // printf("pointer of h is %p\n", h);
+    // printf("size of size: %d\n", h->size);
+    // printf("some pointer %p\n", VIT(h) + h->size - FOOTSIZE);
+    FOOT(h) = h->size;
 
-    printf("allocate %ld bytes\n", size);
+    blk->size = size + PADDING;
+    blk->valid = 1989;
+    FOOT(blk) = blk->size;
 
-    // first fit
+    return VIT(blk) + sizeof(Head);
+}
+
+Head *find_fit(size_t size) {
     if (alloc_alg == 0) {
-        for (struct Head *ptr = root->next; ptr != NULL; ptr = ptr->next) {
-            // amount to allocate fits in given block
-            if (size <= (ptr->size - sizeof(Head))) {
-                // find an address that fits alignment
-                void *aptr = ptr;
-                while (((uintptr_t) aptr) % 8 != 0) {
-                    aptr++;
-                }
-                
-                // check if aligned block can fit allocation
-                if ((ptr->size - (((uintptr_t) aptr) - ((uintptr_t) ptr))) < size) {
-                    continue;
-                } else {
-                    // split free block
-                    struct Head *h = aptr + size + sizeof(Head);
-                    printf("aptr is %p, h is %p\n", aptr, h);
-                    h->size = ptr->size - size - sizeof(Head);
-                    h->valid = 13;
-                    h->prev = ptr->prev;
-                    if (ptr->prev != NULL) {
-                        ptr->prev->next = h;
-                    }
-                    h->next = ptr->next;
-                    if (ptr->next != NULL) {
-                        ptr->next->prev = h;
-                    }
-                    *((int *) (h + h->size - FOOTSIZE)) = ptr->size - size - sizeof(Head);
-                    printer();
-                    ptr->valid = 1989;
-                    return aptr + sizeof(Head);
-                }
+        for (Head *ptr = root->ptrs.next; ptr != NULL; ptr = ptr->ptrs.next) {
+            if (ptr->valid == 13 && ptr->size >= size + PADDING) {
+                return ptr;
             }
         }
     }
     return NULL;
 }
 
-void printer() {
-    printf("explicit free list: ");
-    for (struct Head *ptr = root->next; ptr != NULL; ptr = ptr->next) {
-        printf("%p (%d) (%p) -> ", ptr, ptr->size, (ptr + ptr->size - FOOTSIZE));
-    }
-    printf("\n");
-}
-
-
 void myfree(void *ptr) {
-
-    if (ptr == NULL) {
-        return;
-    }
-
-    // not in heap
-    if (ptr < heap || ptr > (heap + HEAPSIZE)) {
+    if (ptr < heap || ptr > (VIT(heap) + HEAPSIZE)) {
         printf("error: not a heap pointer\n");
         return;
     }
-
-    // not a malloced address
-    struct Head *aptr = ptr - sizeof(Head);
-    if (!(aptr->valid == 1989 || aptr->valid == 13 || aptr->valid == 875)) {
-        printf("error: not a malloced address\n");
-        return;
-    }
-
-    // double free
-    if (aptr->valid == 13) {
+    struct Head *h = ptr - sizeof(Head);
+    if (h->valid == 13) {
         printf("error: double free\n");
         return;
     }
-
-    // check for coalescing
-    int nf = 0;
-    int pf = 0;
-    struct Head *nptr = aptr + aptr->size;
-    struct Head *pptr = aptr - *((int *) (ptr - sizeof(Head) - FOOTSIZE));
-
-    if (nptr->valid == 13) {
-        nf = 1;
+    if (h->valid != 1989) {
+        printf("not a malloced address\n");
+        return;
     }
-    if (pptr->valid == 13) {
-        pf = 1;
-    }
-    
 
+    // don't worry about coalescing for now
+    h->valid = 13;
+    h->ptrs.next = root->ptrs.next;
+    root->ptrs.next = h;
 }
 
 void *myrealloc(void *ptr, size_t size) {
-    return 0;
+    return NULL;
 }
 
 void mycleanup() {

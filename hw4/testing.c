@@ -5,8 +5,13 @@
 
 int main() {
     myinit(0);
-    void *front = mymalloc(64);
-    //void *testin = mymalloc(128);
-    printf("%p\n", front);
+    int *front = mymalloc(sizeof(int));
+    *front = 112;
+    printf("alloc is %p\n", front);
+    printf("val is %d\n", *front);
+    myfree(front);
+    int *nptr = mymalloc(sizeof(unsigned long));
+    *nptr = 67;
+    printf("for real it's %p %lu\n", nptr, *nptr);
     mycleanup();
 }

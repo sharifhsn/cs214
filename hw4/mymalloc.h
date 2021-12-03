@@ -1,3 +1,13 @@
+typedef struct LL {
+    struct LL *next;
+    struct LL *prev;
+} LL;
+
+typedef struct Head {
+    int size;
+    int valid;
+    LL ptrs;
+} Head;
 
 /**
  * Create a 1 MB "heap" and perform any other initializations your code needs.
@@ -99,3 +109,9 @@ void split(int *ptr, size_t size);
  * 
  */
 void printer();
+
+/**
+ * @brief Find the best fitting block associated with the allocation algo
+ * 
+ */
+Head *find_fit(size_t size);
