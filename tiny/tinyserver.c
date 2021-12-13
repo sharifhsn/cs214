@@ -5,7 +5,7 @@ void echo(int connfd);
 int main(int argc, char *argv[]) {
     int listenfd, connfd;
     socklen_t clientlen;
-    struct sockaddr_stroage clientaddr;
+    struct sockaddr_storage clientaddr;
     char client_hostname[MAXLINE], client_port[MAXLINE];
 
     if (argc != 2) {
