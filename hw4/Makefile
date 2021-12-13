@@ -1,4 +1,4 @@
-OUTPUT = testing
+OUTPUT = memperf
 CFLAGS = -g -Wall -Wvla -fsanitize=address
 
 %: %.c 
