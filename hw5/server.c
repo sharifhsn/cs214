@@ -8,6 +8,8 @@
 #include <errno.h>
 #include <netdb.h>
 
+#define _XOPEN_SOURCE 600
+
 // Dimensions for the drawn grid (should be GRIDSIZE * texture dimensions)
 #define GRID_DRAW_WIDTH 640
 #define GRID_DRAW_HEIGHT 640
@@ -46,7 +48,7 @@ int curr;
 
 bool shouldExit = false;
 
-int *seedp;
+int seedp;
 
 // open listening port
 int open_listenfd(char *port) 
@@ -100,7 +102,7 @@ int open_listenfd(char *port)
 // get a random value in the range [0, 1]
 double rand01()
 {
-    return (double) rand_r(seedp) / (double) RAND_MAX;
+    return (double) rand_r(&seedp) / (double) RAND_MAX;
 }
 
 void initGrid()
@@ -161,8 +163,8 @@ void moveTo(int x, int y)
 
 int main(int argc, char* argv[])
 {
-    srand(*seedp = time(NULL));
-
+    srand(time(NULL));
+    seedp = time(NULL);
     level = 1;
 
     int listenfd, connfd;

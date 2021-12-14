@@ -11,7 +11,7 @@ LFLAGS = `sdl2-config --libs` -lSDL2_image -lSDL2_ttf
 all: $(OUTPUT)
 
 server:
-	gcc $(CFLAGS) -c -o $@ $<
+	gcc -g -Wall -Wvla --std=c11 -D_REENTRANT -o server server.c
 
 client: client.o
 	gcc $(CFLAGS) -o $@ $^ $(LFLAGS)
