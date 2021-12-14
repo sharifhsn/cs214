@@ -107,7 +107,6 @@ double rand01()
 
 void initGrid()
 {
-    printf("initalizing grid\n");
     for (int i = 0; i < GRIDSIZE; i++) {
         for (int j = 0; j < GRIDSIZE; j++) {
             double r = rand01();
@@ -153,7 +152,6 @@ void moveTo(int x, int y)
     if (grid[x][y] == TILE_TOMATO) {
         grid[x][y] = TILE_GRASS;
         score++;
-        printf("tomato acquired\n");
         numTomatoes--;
         if (numTomatoes == 0) {
             level++;
@@ -198,7 +196,6 @@ int main(int argc, char* argv[])
         write(connfd, &score, sizeof(score));
         write(connfd, &level, sizeof(level));
         write(connfd, &numTomatoes, sizeof(numTomatoes));
-        printf("done writing\n");
         while (1) {
             read(connfd, &curr, sizeof(curr));
             read(connfd, &tempos, sizeof(tempos));
