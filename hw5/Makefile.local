@@ -10,6 +10,9 @@ LFLAGS = `sdl2-config --libs` -lSDL2_image -lSDL2_ttf
 
 all: $(OUTPUT)
 
+server:
+	gcc $(CFLAGS) -c -o $@ $<
+
 client: client.o
 	gcc $(CFLAGS) -o $@ $^ $(LFLAGS)
 

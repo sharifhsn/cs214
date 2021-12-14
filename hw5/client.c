@@ -1,9 +1,12 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 #include <time.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <errno.h>
-#include <sys/types.h>
+#include <netdb.h>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
@@ -41,7 +44,7 @@ Position playerPosition;
 int score;
 int level;
 int numTomatoes;
-int index;
+int curr;
 
 bool shouldExit = false;
 
@@ -274,7 +277,7 @@ int main(int argc, char* argv[])
     port = argv[2];
     
     clientfd = open_clientfd(host, port);
-    read(clientfd, &index, sizeof(index));
+    read(clientfd, &curr, sizeof(curr));
     read(clientfd, &grid, sizeof(grid));
     read(clientfd, &score, sizeof(score));
     read(clientfd, &level, sizeof(level));
@@ -315,7 +318,7 @@ int main(int argc, char* argv[])
         SDL_RenderClear(renderer);
 
         processInputs();
-        write(clientfd, index, sizeof(index));
+        write(clientfd, curr, sizeof(curr));
         write(clientfd, playerPosition, sizeof(Position));
 
         read(clientfd, &grid, sizeof(grid));

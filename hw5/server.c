@@ -1,13 +1,12 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 #include <time.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <errno.h>
-#include <sys/types.h>
-
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
-#include <SDL2/SDL_ttf.h>
+#include <netdb.h>
 
 // Dimensions for the drawn grid (should be GRIDSIZE * texture dimensions)
 #define GRID_DRAW_WIDTH 640
@@ -24,11 +23,11 @@
 
 #define MAXLINE 8192
 
-typedef struct
+typedef struct Position
 {
     int x;
     int y;
-    Position *next;
+    struct Position *next;
 } Position;
 
 typedef enum
@@ -47,7 +46,7 @@ int curr;
 
 bool shouldExit = false;
 
-TTF_Font* font;
+int *seedp;
 
 // open listening port
 int open_listenfd(char *port) 
@@ -101,7 +100,7 @@ int open_listenfd(char *port)
 // get a random value in the range [0, 1]
 double rand01()
 {
-    return (double) rand_r() / (double) RAND_MAX;
+    return (double) rand_r(seedp) / (double) RAND_MAX;
 }
 
 void initGrid()
@@ -162,7 +161,7 @@ void moveTo(int x, int y)
 
 int main(int argc, char* argv[])
 {
-    srand(time(NULL));
+    srand(*seedp = time(NULL));
 
     level = 1;
 
