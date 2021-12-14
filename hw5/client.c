@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <time.h>
+#include <sys/socket.h>
+#include <errno.h>
+#include <sys/types.h>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
@@ -18,6 +21,7 @@
 
 // Number of cells vertically/horizontally in the grid
 #define GRIDSIZE 10
+#define MAXLINE 8192
 
 typedef struct
 {
@@ -37,10 +41,48 @@ Position playerPosition;
 int score;
 int level;
 int numTomatoes;
+int index;
 
 bool shouldExit = false;
 
 TTF_Font* font;
+
+int open_clientfd(char *hostname, char *port) {
+    int clientfd, rc;
+    struct addrinfo hints, *listp, *p;
+
+    /* Get a list of potential server addresses */
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_socktype = SOCK_STREAM;  /* Open a connection */
+    hints.ai_flags = AI_NUMERICSERV;  /* ... using a numeric port arg. */
+    hints.ai_flags |= AI_ADDRCONFIG;  /* Recommended for connections */
+    if ((rc = getaddrinfo(hostname, port, &hints, &listp)) != 0) {
+        fprintf(stderr, "getaddrinfo failed (%s:%s): %s\n", hostname, port, gai_strerror(rc));
+        return -2;
+    }
+  
+    /* Walk the list for one that we can successfully connect to */
+    for (p = listp; p; p = p->ai_next) {
+        /* Create a socket descriptor */
+        if ((clientfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) < 0) 
+            continue; /* Socket failed, try the next */
+
+        /* Connect to the server */
+        if (connect(clientfd, p->ai_addr, p->ai_addrlen) != -1) 
+            break; /* Success */
+        if (close(clientfd) < 0) { /* Connect failed, try another */  //line:netp:openclientfd:closefd
+            fprintf(stderr, "open_clientfd: close failed: %s\n", strerror(errno));
+            return -1;
+        } 
+    } 
+
+    /* Clean up */
+    freeaddrinfo(listp);
+    if (!p) /* All connects failed */
+        return -1;
+    else    /* The last connect succeeded */
+        return clientfd;
+}
 
 // get a random value in the range [0, 1]
 double rand01()
@@ -221,6 +263,22 @@ int main(int argc, char* argv[])
 
     level = 1;
 
+    int clientfd;
+    char *host, *port, buf[MAXLINE];
+
+    if (argc != 3) {
+        fprintf(stderr, "usage: %s <host> <port>\n", argv[0]);
+        exit(0);
+    }
+    host = argv[1];
+    port = argv[2];
+    
+    clientfd = open_clientfd(host, port);
+    read(clientfd, &index, sizeof(index));
+    read(clientfd, &grid, sizeof(grid));
+    read(clientfd, &score, sizeof(score));
+    read(clientfd, &level, sizeof(level));
+    read(clientfd, &numTomatoes, sizeof(numTomatoes));
     initSDL();
 
     font = TTF_OpenFont("resources/Burbank-Big-Condensed-Bold-Font.otf", HEADER_HEIGHT);
@@ -257,6 +315,13 @@ int main(int argc, char* argv[])
         SDL_RenderClear(renderer);
 
         processInputs();
+        write(clientfd, index, sizeof(index));
+        write(clientfd, playerPosition, sizeof(Position));
+
+        read(clientfd, &grid, sizeof(grid));
+        read(clientfd, &score, sizeof(score));
+        read(clientfd, &level, sizeof(level));
+        read(clientfd, &numTomatoes, sizeof(numTomatoes));
 
         drawGrid(renderer, grassTexture, tomatoTexture, playerTexture);
         drawUI(renderer);
@@ -279,4 +344,7 @@ int main(int argc, char* argv[])
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
+
+    close(clientfd);
+    return 0;
 }

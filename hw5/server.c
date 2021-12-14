@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <time.h>
+#include <sys/socket.h>
+#include <errno.h>
+#include <sys/types.h>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
@@ -19,6 +22,8 @@
 // Number of cells vertically/horizontally in the grid
 #define GRIDSIZE 10
 
+#define MAXLINE 8192
+
 typedef struct
 {
     int x;
@@ -34,14 +39,64 @@ typedef enum
 
 TILETYPE grid[GRIDSIZE][GRIDSIZE];
 
-Position *playerPositions;
+Position playerPositions[4];
 int score;
 int level;
 int numTomatoes;
+int curr;
 
 bool shouldExit = false;
 
 TTF_Font* font;
+
+// open listening port
+int open_listenfd(char *port) 
+{
+    struct addrinfo hints, *listp, *p;
+    int listenfd, rc, optval=1;
+
+    /* Get a list of potential server addresses */
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_socktype = SOCK_STREAM;             /* Accept connections */
+    hints.ai_flags = AI_PASSIVE | AI_ADDRCONFIG; /* ... on any IP address */
+    hints.ai_flags |= AI_NUMERICSERV;            /* ... using port number */
+    if ((rc = getaddrinfo(NULL, port, &hints, &listp)) != 0) {
+        fprintf(stderr, "getaddrinfo failed (port %s): %s\n", port, gai_strerror(rc));
+        return -2;
+    }
+
+    /* Walk the list for one that we can bind to */
+    for (p = listp; p; p = p->ai_next) {
+        /* Create a socket descriptor */
+        if ((listenfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) < 0) 
+            continue;  /* Socket failed, try the next */
+
+        /* Eliminates "Address already in use" error from bind */
+        setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR,    //line:netp:csapp:setsockopt
+                   (const void *)&optval , sizeof(int));
+
+        /* Bind the descriptor to the address */
+        if (bind(listenfd, p->ai_addr, p->ai_addrlen) == 0)
+            break; /* Success */
+        if (close(listenfd) < 0) { /* Bind failed, try the next */
+            fprintf(stderr, "open_listenfd close failed: %s\n", strerror(errno));
+            return -1;
+        }
+    }
+
+
+    /* Clean up */
+    freeaddrinfo(listp);
+    if (!p) /* No address worked */
+        return -1;
+
+    /* Make it a listening socket ready to accept connection requests */
+    if (listen(listenfd, 8) < 0) {
+        close(listenfd);
+	return -1;
+    }
+    return listenfd;
+}
 
 // get a random value in the range [0, 1]
 double rand01()
@@ -64,9 +119,9 @@ void initGrid()
     }
 
     // force player's position to be grass
-    for (Position *playerPosition = playerPositions; playerPosition != NULL; playerPosition = playerPosition->next) {
-        if (grid[playerPosition->x][playerPosition->y] == TILE_TOMATO) {
-            grid[playerPosition->x][playerPosition->y] = TILE_GRASS;
+    for (int i = 0; i < 4; i++) {
+        if (grid[playerPositions[i].x][playerPositions[i].y] == TILE_TOMATO) {
+            grid[playerPositions[i].x][playerPositions[i].y] = TILE_GRASS;
             numTomatoes--;
         }
     }
@@ -77,47 +132,21 @@ void initGrid()
         initGrid();
 }
 
-void initSDL()
-{
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        fprintf(stderr, "Error initializing SDL: %s\n", SDL_GetError());
-        exit(EXIT_FAILURE);
-    }
-
-    int rv = IMG_Init(IMG_INIT_PNG);
-    if ((rv & IMG_INIT_PNG) != IMG_INIT_PNG) {
-        fprintf(stderr, "Error initializing IMG: %s\n", IMG_GetError());
-        exit(EXIT_FAILURE);
-    }
-
-    if (TTF_Init() == -1) {
-        fprintf(stderr, "Error initializing TTF: %s\n", TTF_GetError());
-        exit(EXIT_FAILURE);
-    }
-}
-
-void moveTo(Position *playerPosition, int x, int y)
+void moveTo(int x, int y)
 {
     // Prevent falling off the grid
     if (x < 0 || x >= GRIDSIZE || y < 0 || y >= GRIDSIZE)
         return;
-    
-    // don't run into another player
-    for (Position *ptr = playerPositions; ptr != NULL; ptr = ptr->next) {
-        if (ptr->x == x && ptr->y == y) {
-            return;
-        }
-    }
 
     // Sanity check: player can only move to 4 adjacent squares
-    if (!(abs(playerPosition->x - x) == 1 && abs(playerPosition->y - y) == 0) &&
-        !(abs(playerPosition->x - x) == 0 && abs(playerPosition->y - y) == 1)) {
-        fprintf(stderr, "Invalid move attempted from (%d, %d) to (%d, %d)\n", playerPosition->x, playerPosition->y, x, y);
+    if (!(abs(playerPositions[curr].x - x) == 1 && abs(playerPositions[curr].y - y) == 0) &&
+        !(abs(playerPositions[curr].x - x) == 0 && abs(playerPositions[curr].y - y) == 1)) {
+        fprintf(stderr, "Invalid move attempted from (%d, %d) to (%d, %d)\n", playerPositions[curr].x, playerPositions[curr].y, x, y);
         return;
     }
 
-    playerPosition->x = x;
-    playerPosition->y = y;
+    playerPositions[curr].x = x;
+    playerPositions[curr].y = y;
 
     if (grid[x][y] == TILE_TOMATO) {
         grid[x][y] = TILE_GRASS;
@@ -130,101 +159,6 @@ void moveTo(Position *playerPosition, int x, int y)
     }
 }
 
-void handleKeyDown(SDL_KeyboardEvent* event)
-{
-    // ignore repeat events if key is held down
-    if (event->repeat)
-        return;
-
-    if (event->keysym.scancode == SDL_SCANCODE_Q || event->keysym.scancode == SDL_SCANCODE_ESCAPE)
-        shouldExit = true;
-
-    if (event->keysym.scancode == SDL_SCANCODE_UP || event->keysym.scancode == SDL_SCANCODE_W)
-        moveTo(playerPosition.x, playerPosition.y - 1);
-
-    if (event->keysym.scancode == SDL_SCANCODE_DOWN || event->keysym.scancode == SDL_SCANCODE_S)
-        moveTo(playerPosition.x, playerPosition.y + 1);
-
-    if (event->keysym.scancode == SDL_SCANCODE_LEFT || event->keysym.scancode == SDL_SCANCODE_A)
-        moveTo(playerPosition.x - 1, playerPosition.y);
-
-    if (event->keysym.scancode == SDL_SCANCODE_RIGHT || event->keysym.scancode == SDL_SCANCODE_D)
-        moveTo(playerPosition.x + 1, playerPosition.y);
-}
-
-void processInputs()
-{
-	SDL_Event event;
-
-	while (SDL_PollEvent(&event)) {
-		switch (event.type) {
-			case SDL_QUIT:
-				shouldExit = true;
-				break;
-
-            case SDL_KEYDOWN:
-                handleKeyDown(&event.key);
-				break;
-
-			default:
-				break;
-		}
-	}
-}
-
-void drawGrid(SDL_Renderer* renderer, SDL_Texture* grassTexture, SDL_Texture* tomatoTexture, SDL_Texture* playerTexture)
-{
-    SDL_Rect dest;
-    for (int i = 0; i < GRIDSIZE; i++) {
-        for (int j = 0; j < GRIDSIZE; j++) {
-            dest.x = 64 * i;
-            dest.y = 64 * j + HEADER_HEIGHT;
-            SDL_Texture* texture = (grid[i][j] == TILE_GRASS) ? grassTexture : tomatoTexture;
-            SDL_QueryTexture(texture, NULL, NULL, &dest.w, &dest.h);
-            SDL_RenderCopy(renderer, texture, NULL, &dest);
-        }
-    }
-
-    dest.x = 64 * playerPosition.x;
-    dest.y = 64 * playerPosition.y + HEADER_HEIGHT;
-    SDL_QueryTexture(playerTexture, NULL, NULL, &dest.w, &dest.h);
-    SDL_RenderCopy(renderer, playerTexture, NULL, &dest);
-}
-
-void drawUI(SDL_Renderer* renderer)
-{
-    // largest score/level supported is 2147483647
-    char scoreStr[18];
-    char levelStr[18];
-    sprintf(scoreStr, "Score: %d", score);
-    sprintf(levelStr, "Level: %d", level);
-
-    SDL_Color white = {255, 255, 255};
-    SDL_Surface* scoreSurface = TTF_RenderText_Solid(font, scoreStr, white);
-    SDL_Texture* scoreTexture = SDL_CreateTextureFromSurface(renderer, scoreSurface);
-
-    SDL_Surface* levelSurface = TTF_RenderText_Solid(font, levelStr, white);
-    SDL_Texture* levelTexture = SDL_CreateTextureFromSurface(renderer, levelSurface);
-
-    SDL_Rect scoreDest;
-    TTF_SizeText(font, scoreStr, &scoreDest.w, &scoreDest.h);
-    scoreDest.x = 0;
-    scoreDest.y = 0;
-
-    SDL_Rect levelDest;
-    TTF_SizeText(font, levelStr, &levelDest.w, &levelDest.h);
-    levelDest.x = GRID_DRAW_WIDTH - levelDest.w;
-    levelDest.y = 0;
-
-    SDL_RenderCopy(renderer, scoreTexture, NULL, &scoreDest);
-    SDL_RenderCopy(renderer, levelTexture, NULL, &levelDest);
-
-    SDL_FreeSurface(scoreSurface);
-    SDL_DestroyTexture(scoreTexture);
-
-    SDL_FreeSurface(levelSurface);
-    SDL_DestroyTexture(levelTexture);
-}
 
 int main(int argc, char* argv[])
 {
@@ -232,62 +166,33 @@ int main(int argc, char* argv[])
 
     level = 1;
 
-    initSDL();
+    int listenfd, connfd;
+    socklen_t clientlen;
+    struct sockaddr_storage clientaddr;
+    char client_hostname[MAXLINE], client_port[MAXLINE];
 
-    font = TTF_OpenFont("resources/Burbank-Big-Condensed-Bold-Font.otf", HEADER_HEIGHT);
-    if (font == NULL) {
-        fprintf(stderr, "Error loading font: %s\n", TTF_GetError());
-        exit(EXIT_FAILURE);
+    if (argc != 2) {
+        fprintf(stderr, "usage: %s <port>\n", argv[0]);
+        exit(0);
     }
-
-    playerPosition.x = playerPosition.y = GRIDSIZE / 2;
     initGrid();
 
-    SDL_Window* window = SDL_CreateWindow("Client", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, 0);
+    listenfd = open_listenfd(argv[1]);
+    Position tempos;
+    while (1) {
+        clientlen = sizeof(struct sockaddr_storage);
+        connfd = accept(listenfd, (struct sockaddr *) &clientaddr, &clientlen);
+        write(connfd, 0, sizeof(int));
+        while (1) {
+            read(connfd, &curr, sizeof(curr));
+            read(connfd, &tempos, tempos);
+            moveTo(tempos.x, tempos.y);
 
-    if (window == NULL) {
-        fprintf(stderr, "Error creating app window: %s\n", SDL_GetError());
-        exit(EXIT_FAILURE);
+            write(connfd, grid, sizeof(grid));
+            write(connfd, score, sizeof(score));
+            write(connfd, level, sizeof(level));
+            write(connfd, numTomatoes, sizeof(numTomatoes));
+        }
+        close(connfd);
     }
-
-    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, 0);
-
-	if (renderer == NULL)
-	{
-		fprintf(stderr, "Error creating renderer: %s\n", SDL_GetError());
-        exit(EXIT_FAILURE);
-	}
-
-    SDL_Texture *grassTexture = IMG_LoadTexture(renderer, "resources/grass.png");
-    SDL_Texture *tomatoTexture = IMG_LoadTexture(renderer, "resources/tomato.png");
-    SDL_Texture *playerTexture = IMG_LoadTexture(renderer, "resources/player.png");
-
-    // main game loop
-    while (!shouldExit) {
-        SDL_SetRenderDrawColor(renderer, 0, 105, 6, 255);
-        SDL_RenderClear(renderer);
-
-        processInputs();
-
-        drawGrid(renderer, grassTexture, tomatoTexture, playerTexture);
-        drawUI(renderer);
-
-        SDL_RenderPresent(renderer);
-
-        SDL_Delay(16); // 16 ms delay to limit display to 60 fps
-    }
-
-    // clean up everything
-    SDL_DestroyTexture(grassTexture);
-    SDL_DestroyTexture(tomatoTexture);
-    SDL_DestroyTexture(playerTexture);
-
-    TTF_CloseFont(font);
-    TTF_Quit();
-
-    IMG_Quit();
-
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
 }
