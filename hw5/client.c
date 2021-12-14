@@ -95,31 +95,6 @@ double rand01()
     return (double) rand() / (double) RAND_MAX;
 }
 
-void initGrid()
-{
-    for (int i = 0; i < GRIDSIZE; i++) {
-        for (int j = 0; j < GRIDSIZE; j++) {
-            double r = rand01();
-            if (r < 0.1) {
-                grid[i][j] = TILE_TOMATO;
-                numTomatoes++;
-            }
-            else
-                grid[i][j] = TILE_GRASS;
-        }
-    }
-
-    // force player's position to be grass
-    if (grid[playerPosition.x][playerPosition.y] == TILE_TOMATO) {
-        grid[playerPosition.x][playerPosition.y] = TILE_GRASS;
-        numTomatoes--;
-    }
-
-    // ensure grid isn't empty
-    while (numTomatoes == 0)
-        initGrid();
-}
-
 void initSDL()
 {
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -271,7 +246,7 @@ int main(int argc, char* argv[])
     
     clientfd = open_clientfd(host, port);
     printf("listening!\n");
-    bytes_read = read(clientfd, &curr, sizeof(curr));
+    read(clientfd, &curr, sizeof(curr));
     printf("Curr! %d\n", curr);
     // while (bytes_read < sizeof(grid)) {
     //     printf("dop it %d\n", bytes_read);
@@ -284,9 +259,9 @@ int main(int argc, char* argv[])
     //         read(clientfd, &(grid[i][j]), sizeof(grid[i][j]));
     //     }
     // }
-    // bytes_read = read(clientfd, &grid, sizeof(grid));
-    // printf("Gierj %d\n", bytes_read);
-    // printgrid(grid);
+    bytes_read = read(clientfd, &grid, sizeof(grid));
+    printf("Gierj %d\n", bytes_read);
+    printgrid(grid);
     read(clientfd, &score, sizeof(score));
     printf("Score\n");
     read(clientfd, &level, sizeof(level));
@@ -326,15 +301,17 @@ int main(int argc, char* argv[])
     while (!shouldExit) {
         SDL_SetRenderDrawColor(renderer, 0, 105, 6, 255);
         SDL_RenderClear(renderer);
-
         processInputs();
         write(clientfd, &curr, sizeof(curr));
-        write(clientfd, &playerPosition, sizeof(Position));
+        write(clientfd, &tempmove, sizeof(tempmove));
 
         read(clientfd, &grid, sizeof(grid));
         read(clientfd, &score, sizeof(score));
         read(clientfd, &level, sizeof(level));
         read(clientfd, &numTomatoes, sizeof(numTomatoes));
+        read(clientfd, &playerPosition, sizeof(playerPosition));
+        printf("tomatoes: %d\n", numTomatoes);
+        printgrid(grid);
 
         drawGrid(renderer, grassTexture, tomatoTexture, playerTexture);
         drawUI(renderer);

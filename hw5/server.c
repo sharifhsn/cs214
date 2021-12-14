@@ -30,7 +30,6 @@ typedef struct Position
 {
     int x;
     int y;
-    struct Position *next;
 } Position;
 
 typedef enum
@@ -108,6 +107,7 @@ double rand01()
 
 void initGrid()
 {
+    printf("initalizing grid\n");
     for (int i = 0; i < GRIDSIZE; i++) {
         for (int j = 0; j < GRIDSIZE; j++) {
             double r = rand01();
@@ -153,6 +153,7 @@ void moveTo(int x, int y)
     if (grid[x][y] == TILE_TOMATO) {
         grid[x][y] = TILE_GRASS;
         score++;
+        printf("tomato acquired\n");
         numTomatoes--;
         if (numTomatoes == 0) {
             level++;
@@ -166,6 +167,7 @@ int main(int argc, char* argv[])
 {
     srand(time(NULL));
     seedp = time(NULL);
+    curr = 0;
     level = 1;
     score = 0;
 
@@ -185,27 +187,30 @@ int main(int argc, char* argv[])
     while (1) {
         clientlen = sizeof(struct sockaddr_storage);
         connfd = accept(listenfd, (struct sockaddr *) &clientaddr, &clientlen);
-        write(connfd, 0, sizeof(curr));
+        write(connfd, &curr, sizeof(curr));
 
-        // write(connfd, grid, sizeof(grid));
+        write(connfd, &grid, sizeof(grid));
         // for (int i = 0; i < GRIDSIZE; i++) {
         //     for (int j = 0; j < GRIDSIZE; j++) {
         //         write(connfd, grid[i][j], sizeof(grid[i][j]));
         //     }
         // }
-        write(connfd, score, sizeof(score));
-        write(connfd, level, sizeof(level));
-        write(connfd, numTomatoes, sizeof(numTomatoes));
+        write(connfd, &score, sizeof(score));
+        write(connfd, &level, sizeof(level));
+        write(connfd, &numTomatoes, sizeof(numTomatoes));
         printf("done writing\n");
         while (1) {
             read(connfd, &curr, sizeof(curr));
             read(connfd, &tempos, sizeof(tempos));
-            moveTo(tempos.x, tempos.y);
+            if (tempos.x != playerPositions[curr].x || tempos.y != playerPositions[curr].y) {
+                moveTo(tempos.x, tempos.y);
+            }
 
-            write(connfd, grid, sizeof(grid));
-            write(connfd, score, sizeof(score));
-            write(connfd, level, sizeof(level));
-            write(connfd, numTomatoes, sizeof(numTomatoes));
+            write(connfd, &grid, sizeof(grid));
+            write(connfd, &score, sizeof(score));
+            write(connfd, &level, sizeof(level));
+            write(connfd, &numTomatoes, sizeof(numTomatoes));
+            write(connfd, &playerPositions[curr], sizeof(playerPositions[curr]));
         }
         close(connfd);
     }
