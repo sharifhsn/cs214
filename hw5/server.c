@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <errno.h>
@@ -166,6 +167,7 @@ int main(int argc, char* argv[])
     srand(time(NULL));
     seedp = time(NULL);
     level = 1;
+    score = 0;
 
     int listenfd, connfd;
     socklen_t clientlen;
@@ -183,10 +185,21 @@ int main(int argc, char* argv[])
     while (1) {
         clientlen = sizeof(struct sockaddr_storage);
         connfd = accept(listenfd, (struct sockaddr *) &clientaddr, &clientlen);
-        write(connfd, 0, sizeof(int));
+        write(connfd, 0, sizeof(curr));
+
+        // write(connfd, grid, sizeof(grid));
+        // for (int i = 0; i < GRIDSIZE; i++) {
+        //     for (int j = 0; j < GRIDSIZE; j++) {
+        //         write(connfd, grid[i][j], sizeof(grid[i][j]));
+        //     }
+        // }
+        write(connfd, score, sizeof(score));
+        write(connfd, level, sizeof(level));
+        write(connfd, numTomatoes, sizeof(numTomatoes));
+        printf("done writing\n");
         while (1) {
             read(connfd, &curr, sizeof(curr));
-            read(connfd, &tempos, tempos);
+            read(connfd, &tempos, sizeof(tempos));
             moveTo(tempos.x, tempos.y);
 
             write(connfd, grid, sizeof(grid));

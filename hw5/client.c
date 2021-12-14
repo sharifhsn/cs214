@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <errno.h>
@@ -45,6 +46,7 @@ int score;
 int level;
 int numTomatoes;
 int curr;
+Position tempmove;
 
 bool shouldExit = false;
 
@@ -139,29 +141,8 @@ void initSDL()
 
 void moveTo(int x, int y)
 {
-    // Prevent falling off the grid
-    if (x < 0 || x >= GRIDSIZE || y < 0 || y >= GRIDSIZE)
-        return;
-
-    // Sanity check: player can only move to 4 adjacent squares
-    if (!(abs(playerPosition.x - x) == 1 && abs(playerPosition.y - y) == 0) &&
-        !(abs(playerPosition.x - x) == 0 && abs(playerPosition.y - y) == 1)) {
-        fprintf(stderr, "Invalid move attempted from (%d, %d) to (%d, %d)\n", playerPosition.x, playerPosition.y, x, y);
-        return;
-    }
-
-    playerPosition.x = x;
-    playerPosition.y = y;
-
-    if (grid[x][y] == TILE_TOMATO) {
-        grid[x][y] = TILE_GRASS;
-        score++;
-        numTomatoes--;
-        if (numTomatoes == 0) {
-            level++;
-            initGrid();
-        }
-    }
+    tempmove.x = x;
+    tempmove.y = y;
 }
 
 void handleKeyDown(SDL_KeyboardEvent* event)
@@ -260,14 +241,24 @@ void drawUI(SDL_Renderer* renderer)
     SDL_DestroyTexture(levelTexture);
 }
 
+void printgrid(TILETYPE grid[][GRIDSIZE]) {
+    for (int i = 0; i < GRIDSIZE; i++) {
+        for (int j = 0; j < GRIDSIZE; j++) {
+            printf("%d ", grid[i][j]);
+        }
+        printf("\n");
+    }
+}
+
 int main(int argc, char* argv[])
 {
     srand(time(NULL));
+    printf("Random init\n");
 
     level = 1;
 
     int clientfd;
-    char *host, *port, buf[MAXLINE];
+    char *host, *port;
 
     if (argc != 3) {
         fprintf(stderr, "usage: %s <host> <port>\n", argv[0]);
@@ -275,13 +266,32 @@ int main(int argc, char* argv[])
     }
     host = argv[1];
     port = argv[2];
+    size_t bytes_read = 0;
+    // size_t result = 0;
     
     clientfd = open_clientfd(host, port);
-    read(clientfd, &curr, sizeof(curr));
-    read(clientfd, &grid, sizeof(grid));
+    printf("listening!\n");
+    bytes_read = read(clientfd, &curr, sizeof(curr));
+    printf("Curr! %d\n", curr);
+    // while (bytes_read < sizeof(grid)) {
+    //     printf("dop it %d\n", bytes_read);
+    //     result = read(clientfd, &grid + bytes_read, sizeof(grid) - bytes_read);
+    //     printf("trying %d\n", result);
+    //     bytes_read += result;    
+    // }
+    // for (int i = 0; i < GRIDSIZE; i++) {
+    //     for (int j = 0; j < GRIDSIZE; j++) {
+    //         read(clientfd, &(grid[i][j]), sizeof(grid[i][j]));
+    //     }
+    // }
+    // bytes_read = read(clientfd, &grid, sizeof(grid));
+    // printf("Gierj %d\n", bytes_read);
+    // printgrid(grid);
     read(clientfd, &score, sizeof(score));
+    printf("Score\n");
     read(clientfd, &level, sizeof(level));
     read(clientfd, &numTomatoes, sizeof(numTomatoes));
+    printf("%d tomatoes?\n", numTomatoes);
     initSDL();
 
     font = TTF_OpenFont("resources/Burbank-Big-Condensed-Bold-Font.otf", HEADER_HEIGHT);
@@ -291,7 +301,6 @@ int main(int argc, char* argv[])
     }
 
     playerPosition.x = playerPosition.y = GRIDSIZE / 2;
-    initGrid();
 
     SDL_Window* window = SDL_CreateWindow("Client", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, 0);
 
@@ -313,13 +322,14 @@ int main(int argc, char* argv[])
     SDL_Texture *playerTexture = IMG_LoadTexture(renderer, "resources/player.png");
 
     // main game loop
+    printf("waiting...\n");
     while (!shouldExit) {
         SDL_SetRenderDrawColor(renderer, 0, 105, 6, 255);
         SDL_RenderClear(renderer);
 
         processInputs();
-        write(clientfd, curr, sizeof(curr));
-        write(clientfd, playerPosition, sizeof(Position));
+        write(clientfd, &curr, sizeof(curr));
+        write(clientfd, &playerPosition, sizeof(Position));
 
         read(clientfd, &grid, sizeof(grid));
         read(clientfd, &score, sizeof(score));
