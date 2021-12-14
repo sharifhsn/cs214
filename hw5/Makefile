@@ -11,7 +11,7 @@ LFLAGS = -L lib -lSDL2 -lSDL2_image -lSDL2_ttf
 all: $(OUTPUT)
 
 server:
-	gcc $(CFLAGS) -c -o $@ $@.c
+	gcc $(CFLAGS) -o server server.c
 
 runclient: $(OUTPUT)
 	LD_LIBRARY_PATH=lib ./client
